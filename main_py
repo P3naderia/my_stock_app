@@ -1,0 +1,53 @@
+## streamlit run "C:/Users/hm620/python basic/Nico/extractors/stock_app.py"
+
+# 필요한 라이브러리 import
+import streamlit as st   
+from yahooquery import Screener
+import pandas as pd
+
+# Streamlit 앱 제목
+st.title("🏭 산업군별 주식 데이터 검색")
+
+# Screener 객체 생성
+screener = Screener()
+
+# Yahoo Finance에서 제공하는 스크리너 목록 가져오기
+available_screeners = screener.available_screeners  # ✅ screen_ids 없이 사용 가능
+
+# 산업군 목록 생성 (자동 동기화)
+sector_mapping = {key: key.replace("_", " ").title() for key in available_screeners}  
+
+# 산업군 선택
+selected_sector = st.selectbox("🔍 산업군을 선택하세요:", list(sector_mapping.values()))
+
+# 버튼 클릭 시 데이터 가져오기
+if st.button("검색"):
+    # 선택한 섹터의 실제 ID 찾기
+    selected_key = next((key for key, title in sector_mapping.items() if title == selected_sector), None)
+
+    if not selected_key:
+        st.warning("⚠️ 선택한 산업군이 유효하지 않습니다.")
+    else:
+        try:
+            # ✅ 선택한 스크리너 ID로 데이터 가져오기
+            results = screener.get_screeners(screen_ids=[selected_key], count=20)
+            stocks = results.get(selected_key, {}).get("quotes", [])
+
+            if stocks:
+                # 필요한 정보만 추출하여 DataFrame 생성
+                data = {
+                    "티커": [stock["symbol"] for stock in stocks],
+                    "주가": [stock.get("regularMarketPrice", "N/A") for stock in stocks],
+                    "주가 변화율 (%)": [round(stock.get("regularMarketChangePercent", 0), 1) if stock.get("regularMarketChangePercent") is not None else "N/A" for stock in stocks]
+
+                }
+                df = pd.DataFrame(data)
+
+                # 테이블로 표시
+                st.write(f"📊 **{selected_sector} 산업군 주식 데이터**")
+                st.dataframe(df)
+            else:
+                st.warning("⚠️ 선택한 산업군에서 데이터를 찾을 수 없습니다.")
+
+        except Exception as e:
+            st.error(f"🚨 오류 발생: {e}")
