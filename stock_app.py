@@ -4,6 +4,7 @@
 import streamlit as st   
 from yahooquery import Screener, Ticker
 import pandas as pd
+from datetime import datetime
 
 # Streamlit 앱 제목
 st.title("📈 주식 데이터 검색")
@@ -19,7 +20,7 @@ with tab1:
     screener = Screener()
 
     # Yahoo Finance에서 제공하는 스크리너 목록 가져오기
-    available_screeners = screener.available_screeners  # ✅ screen_ids 없이 사용 가능
+    available_screeners = screener.available_screeners  
 
     # 산업군 목록 생성 (자동 동기화)
     sector_mapping = {key: key.replace("_", " ").title() for key in available_screeners}  
@@ -62,25 +63,45 @@ with tab1:
 with tab2:
     st.subheader("🔍 개별 주식 검색")
 
-    # 사용자 입력 (티커 코드)
     ticker_input = st.text_input("🎯 종목 코드를 입력하세요 (예: AAPL, TSLA, MSFT)", "")
 
-    # 버튼 클릭 시 개별 주식 데이터 가져오기
     if st.button("🔎 검색", key="ticker_search"):
         if not ticker_input:
             st.warning("⚠️ 종목 코드를 입력하세요!")
         else:
             try:
-                # Ticker 객체 생성
                 stock = Ticker(ticker_input)
-                info = stock.summary_detail[ticker_input]
+                info = stock.summary_detail.get(ticker_input, {})
+                price_info = stock.price.get(ticker_input, {})
 
-                if info:
+                if info and price_info:
+                    # ✅ 기준 날짜 변환 (정수 변환 추가)
+                    market_time = price_info.get("regularMarketTime", None)
+                    if market_time:
+                        try:
+                            market_time = datetime.utcfromtimestamp(int(market_time)).strftime("%Y-%m-%d %H:%M:%S (UTC)")
+                        except ValueError:
+                            market_time = "N/A"  
+
+                    # ✅ 시장 상태 가져오기
+                    market_state = price_info.get("marketState", "N/A")
+                    market_state_map = {
+                        "REGULAR": "📈 본장(Regular Market)",
+                        "POST": "🌙 애프터장(After Hours)",
+                        "PRE": "🌅 프리마켓(Pre-Market)",
+                        "CLOSED": "🔒 시장 종료(Closed)"
+                    }
+                    market_state_text = market_state_map.get(market_state, market_state)
+
+                    # ✅ 주식 정보 출력
                     st.write(f"📌 **{ticker_input} 주식 정보**")
                     st.write(f"**현재 가격**: {info.get('regularMarketPrice', 'N/A')} USD")
                     st.write(f"**PER**: {info.get('trailingPE', 'N/A')}")
                     st.write(f"**EPS**: {info.get('epsTrailingTwelveMonths', 'N/A')}")
                     st.write(f"**시가총액**: {info.get('marketCap', 'N/A')} USD")
+                    st.write(f"**📅 기준 날짜**: {market_time}")
+                    st.write(f"**⏳ 현재 시장 상태**: {market_state_text}")
+
                 else:
                     st.warning("⚠️ 종목 정보를 찾을 수 없습니다.")
 
